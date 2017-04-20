@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace AddressProcessing.CSV
@@ -8,135 +9,136 @@ namespace AddressProcessing.CSV
            Assume this code is in production and backwards compatibility must be maintained.
     */
 
-    public class CSVReaderWriter
+    //I decided not to havethis class to inherit and interface in order to be testable because in doing so I will be breaking the single responsibility principle. 
+    //Howeevr what I have done is to split the responsibilities in seperate interfaces, IReader, IWriter with the option to inject them  when this class is being instatiated.
+    //Also Alternativaly the existing methods of this class would still work for backward compatibility, i just ensure the new interfaces IReader, I writer are called withing the existing methods where necessary more of adapter design pattern.
+    public class CSVReaderWriter : IDisposable
     {
-        private StreamReader _readerStream = null;
-        private StreamWriter _writerStream = null;
+        private IWriter _writer;
+        private IReader _reader;
+        private StreamReader _readerStream;
+        private StreamWriter _writerStream;
 
+        //Injecting IReader, IWritter
+        public CSVReaderWriter(IReader reader, IWriter writer)
+        {
+            if (reader == null) throw new ArgumentNullException(nameof(reader));
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            _writer = writer;
+            _reader = reader;
+        }
+
+        //MAintain Backwardcompatibility
+        public CSVReaderWriter()
+        {
+        }
+
+        //this shhould be moved to seperate class idealy but left it for now
         [Flags]
-        public enum Mode { Read = 1, Write = 2 };
+        public enum Mode { Read = 1, Write = 2 }
 
         public void Open(string fileName, Mode mode)
         {
-            if (mode == Mode.Read)
+            //Switch used instead of "if-else"
+            switch (mode)
             {
-                _readerStream = File.OpenText(fileName);
+                case Mode.Read:
+                    {
+                        //instanciate the StreamReader object
+                        _readerStream = new StreamReader(fileName);
+                        break;
+                    }
+                case Mode.Write:
+                    {
+                        //instanciated the StreamWriterObject
+                        _writerStream = new StreamWriter(fileName);
+                        break;
+                    }
+                default:
+                    {
+                        throw new Exception($"Unknown file mode for {fileName}");
+                    }
             }
-            else if (mode == Mode.Write)
-            {
-                FileInfo fileInfo = new FileInfo(fileName);
-                _writerStream = fileInfo.CreateText();
-            }
-            else
-            {
-                throw new Exception("Unknown file mode for " + fileName);
-            }
+
         }
 
         public void Write(params string[] columns)
         {
-            string outPut = "";
-
-            for (int i = 0; i < columns.Length; i++)
+            //this is to maintain backward compatibility
+            //It will be null only when CSVReaderWriter is instanciated with no parameters.
+            if (_writer == null)
             {
-                outPut += columns[i];
-                if ((columns.Length - 1) != i)
-                {
-                    outPut += "\t";
-                }
+                _writer = new CSVWriter(_writerStream);
             }
 
-            WriteLine(outPut);
-        }
+            using (_writer)
+            {
+                _writer.WriteLine(columns);
+            }
 
+        }
+        
+        //This method does not return any data so the parameters are not required, 
+        //however I have left the parameters to maintain backward compatibility
         public bool Read(string column1, string column2)
         {
-            const int FIRST_COLUMN = 0;
-            const int SECOND_COLUMN = 1;
-
-            string line;
-            string[] columns;
-
-            char[] separator = { '\t' };
-
-            line = ReadLine();
-            columns = line.Split(separator);
-
-            if (columns.Length == 0)
-            {
-                column1 = null;
-                column2 = null;
-
-                return false;
-            }
-            else
-            {
-                column1 = columns[FIRST_COLUMN];
-                column2 = columns[SECOND_COLUMN];
-
-                return true;
-            }
+            IList<string> data;
+            return Read(out data);
         }
 
         public bool Read(out string column1, out string column2)
         {
-            const int FIRST_COLUMN = 0;
-            const int SECOND_COLUMN = 1;
-
-            string line;
-            string[] columns;
-
-            char[] separator = { '\t' };
-
-            line = ReadLine();
-
-            if (line == null)
+            IList<string> data;
+            var output = Read(out data);
+            if (output)
             {
-                column1 = null;
-                column2 = null;
-
-                return false;
+                column1 = data[0] ?? data[0];
+                column2 = data[1] ?? data[1];
             }
-
-            columns = line.Split(separator);
-
-            if (columns.Length == 0)
-            {
-                column1 = null;
-                column2 = null;
-
-                return false;
-            } 
             else
             {
-                column1 = columns[FIRST_COLUMN];
-                column2 = columns[SECOND_COLUMN];
-
-                return true;
+                column1 = null;
+                column2 = null;
             }
+
+            return output;
         }
 
-        private void WriteLine(string line)
-        {
-            _writerStream.WriteLine(line);
-        }
-
-        private string ReadLine()
-        {
-            return _readerStream.ReadLine();
-        }
 
         public void Close()
         {
             if (_writerStream != null)
             {
                 _writerStream.Close();
+                _writerStream = null;
             }
 
             if (_readerStream != null)
             {
                 _readerStream.Close();
+                _readerStream = null;
             }
+
+        }
+
+        //Ensuring that the unmanaged resouces can be disposed
+        public void Dispose()
+        {
+            Close();
+        }
+
+        //Reusable private method as it is shared between the two read methods
+        private bool Read(out IList<string> data)
+        {
+            //this is to maintain backward compatibility
+            //It will be null only when CSVReaderWriter is instanciated with no parameters.
+            if (_reader == null)
+            {
+                _reader = new CSVReader(_readerStream);
+            }
+
+            return _reader.ReadLineColumnValues(out data);
+
         }
     }
 }

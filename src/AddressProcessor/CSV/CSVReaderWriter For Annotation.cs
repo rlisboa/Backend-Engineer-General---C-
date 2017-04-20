@@ -7,10 +7,11 @@ namespace AddressProcessing.CSV
         1) List three to five key concerns with this implementation that you would discuss with the junior developer. 
 
         Please leave the rest of this file as it is so we can discuss your concerns during the next stage of the interview process.
-        
-        *)
-        *)
-        *)
+         *) This breaks the single Responsibility principle of the SOLID design principles, this class should have a single responsibility for each of the read and write functions, so ensure this class is not concerned with both functionality. 
+         *) This concrete class is not testable using DI, it should implement an interface in order to apply dependency injection or any mocking frameworks for testing purposes.
+         *) As we are dealing with streams(unmanaged resource) it should be instantiated within a 'using statement block' (to simplify our code if we are not catching any exceptions or in a finally block if we are') in order to guarantee its disposal after use to release the underlying resources.
+         *) Also Given that this class serves as the decorator to the File stream, it should implement the IDispose, and calling the close/dispose on this class ensure that its closed an also the backing store stream in this case which is a FileStream.
+         *)What is the purpose of this menthod public bool Read(string column1, string column2) without the 'out' key? it does not return any result in the object, why pass in the parameter?
     */
 
     public class CSVReaderWriterForAnnotation
